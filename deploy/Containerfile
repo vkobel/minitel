@@ -1,0 +1,19 @@
+# StageX images are linux/amd64 only; force the platform for arm64 hosts.
+FROM --platform=linux/amd64 stagex/pallet-go@sha256:c19ac71ea4983aa097b96fcd8173aa5ec2694eddd005822526d3dcc4947bfbc7 AS build
+
+ENV SOURCE_DATE_EPOCH=1 \
+    CGO_ENABLED=0 \
+    GOOS=linux \
+    GOARCH=amd64
+
+WORKDIR /src
+# Build context is the repo root (caution runs `docker build -f deploy/Containerfile .`).
+COPY deploy/ /src/
+
+# stdlib-only build -> no module downloads -> fully hermetic.
+RUN --network=none \
+    go build -trimpath -buildvcs=false -ldflags="-s -w -buildid=" -o /server .
+
+FROM scratch AS run
+COPY --from=build /server /server
+ENTRYPOINT ["/server"]
