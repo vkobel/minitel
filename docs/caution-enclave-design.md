@@ -80,11 +80,12 @@ A small `net/http` server.
 - Sets the **same security headers** as the current `vercel.json` on every
   response: `Content-Security-Policy`, `X-Content-Type-Options`,
   `Referrer-Policy`, `Strict-Transport-Security`, `Permissions-Policy`.
-- Listens plain HTTP on `:8080`. Caution's Caddy terminates TLS and serves the
-  `domain`.
+- Listens plain HTTP on `:8083` (STEVE's upstream when `e2e` is on; override with
+  `PORT`). Caution's Caddy terminates TLS; with e2e it routes Caddy → STEVE →
+  `127.0.0.1:8083`.
 
 What it does: serve the embedded multi-app static tree with security headers.
-Interface: HTTP on `:8080`.
+Interface: HTTP on `:8083`.
 Depends on: `deploy/site/` at build time.
 
 ### 3. `Containerfile` (repo root; StageX, reproducible)
@@ -106,12 +107,14 @@ Caution auto-detects the root `Containerfile`.
 
 ```procfile
 run: /server
-http_port: 8080
-ports: 8080
+e2e: true
 app_sources: https://github.com/kilnfi/minitel
 ```
 
-`http_port` value also appears in `ports` (Caution Procfile validation requires
+With `e2e: true`, Caution fronts the app with STEVE (Caddy → STEVE →
+`127.0.0.1:8083`), so no `http_port`/`ports` is needed — the app port is internal
+behind STEVE. (For a non-e2e deploy you'd instead set `http_port`/`ports`, and the
+`http_port` value also appears in `ports` — Caution Procfile validation requires
 it). Add `domain: <hostname>` if you want Caddy TLS fronting for a custom domain.
 
 ## Verification story
@@ -133,7 +136,6 @@ automates this so vendored dist stays in sync with source.
 ## Out of scope
 
 - Locksmith / secrets (the app has none).
-- E2E encryption (`e2e`) — static public content, not needed.
 - Outbound networking from the enclave.
 - Per-chain subdomains (rejected in favor of path-based + landing page).
 

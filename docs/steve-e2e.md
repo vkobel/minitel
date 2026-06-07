@@ -74,26 +74,32 @@ the enclave's `run.sh`). We only ship the **client** half — the service worker
 ## 4. The single-origin routing trick
 
 The browser talks to one origin (`https://<domain>`). The host's Caddy fans that
-single origin out to three different services by path and headers. This is what
-lets the service worker use plain same-origin paths with no CORS:
+single origin out by path and headers. When `e2e: true`, the **default upstream
+is STEVE** — so all app traffic (encrypted *or* plain) flows through STEVE, which
+decrypts E2E requests and forwards everything to the app on `127.0.0.1:8083`.
+Only `/attestation` bypasses STEVE (it goes to bootproofd). This is why the
+service worker can use plain same-origin paths with no CORS:
 
 ```
                          https://<domain>  (Caddy, host, TLS)
                                   │
-        ┌─────────────────────────┼───────────────────────────────┐
-        │                         │                                │
-   /attestation            /e2p/*  + encrypted POSTs          everything else
-        │                  (X-E2P-Key header)                       │
-        ▼                         ▼                                 ▼
-   bootproofd                   STEVE                            /server
-   :49502                       :49500                           :8080
-   (attestation doc)        (decrypt/encrypt)                 (minitel app)
+                ┌─────────────────┴──────────────────┐
+                │                                     │
+          /attestation                        everything else
+                │                       (/e2p/*, encrypted POSTs, and plain)
+                ▼                                     ▼
+          bootproofd                              STEVE  :49500
+          :49502                                  (decrypt / passthrough)
+          (attestation doc)                          │
+                                                      ▼
+                                               minitel app  :8083
+                                               (/server, plaintext)
 ```
 
-The encrypted-request match is precise (from the host Caddyfile):
+The relevant host Caddyfile (the default upstream becomes STEVE under e2e):
 
 ```caddyfile
-handle /e2p/*            { reverse_proxy localhost:49500 }   # key exchange
+handle /e2p/*            { reverse_proxy localhost:49500 }   # key exchange -> STEVE
 @e2p_encrypted {                                             # encrypted app traffic
     method POST
     header X-E2P-Key *
@@ -102,12 +108,15 @@ handle /e2p/*            { reverse_proxy localhost:49500 }   # key exchange
 }
 handle @e2p_encrypted    { reverse_proxy localhost:49500 }   # -> STEVE
 handle /attestation      { reverse_proxy localhost:49502 }   # -> bootproofd
-handle                   { reverse_proxy localhost:8080  }   # -> minitel app
+handle                   { reverse_proxy localhost:49500 }   # default -> STEVE (e2e)
 ```
 
-Ports `49500` (STEVE) and `49502` (bootproofd) are internal enclave ports bridged
-over vsock; the browser never addresses them directly. Because all of this is one
-origin, the service worker's default endpoints (`/attestation`,
+STEVE forwards both decrypted and plain (passthrough, no `X-E2P-Key`) requests to
+its hardcoded upstream `http://127.0.0.1:8083`, so **the app must listen on
+`:8083`** when e2e is enabled (minitel's server defaults to it; override with
+`PORT`). Ports `49500` (STEVE) and `49502` (bootproofd) are internal enclave ports
+bridged over vsock; the browser never addresses them directly. Because all of
+this is one origin, the service worker's default endpoints (`/attestation`,
 `/e2p/v1/create_shared_key`) work unchanged and **no `e2e_cors_origins` is
 needed**.
 
@@ -160,7 +169,7 @@ worker:
 2. sends it as a `POST` with `Content-Type: application/octet-stream` and the
    `X-E2P-Key` header,
 3. Caddy routes it to STEVE, which decrypts and replays the original request to
-   the app on `:8080`,
+   the app on `:8083`,
 4. STEVE encrypts the app's response, the worker decrypts it, and the page
    receives a normal `Response`.
 

@@ -22,7 +22,7 @@ site: ## Build all 21 chain SPAs + csp.json into deploy/site/
 test: ## Run the Go server unit tests
 	cd deploy && go test ./...
 
-run: ## Build & run the static server locally on :8080
+run: ## Build & run the static server locally on :8083
 	cd deploy && go run .
 
 build: install site test ## Install deps, build the site, run tests

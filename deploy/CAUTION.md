@@ -20,9 +20,15 @@ Practical recap of how this is built and deployed. Design rationale lives in
 
 All 21 chain decoders (client-side Vite SPAs) are served from a **single**
 AWS Nitro / Caution enclave. A tiny Go server (`deploy/`) `go:embed`s a prebuilt
-static tree and serves it on `:8080`; Caution fronts it with TLS. The build is
+static tree and serves it on `:8083`; Caution fronts it with TLS. The build is
 StageX-reproducible so `caution verify` can reproduce the enclave measurements
 (PCRs) from source.
+
+> **Port note:** the server listens on `:8083` because, with `e2e: true`, Caution
+> routes Caddy → STEVE → `127.0.0.1:8083` (STEVE's hardcoded app upstream). The
+> port is overridable via `PORT`; `:8083` is the default so it works behind STEVE
+> out of the box. With e2e on, the app port is internal (behind STEVE), so the
+> Procfile needs no `http_port`/`ports`.
 
 Routing: each chain is a path prefix — `/<chain>/` (e.g. `/ethereum/`) — with a
 landing page at `/`. Each SPA is built with Vite `--base=/<chain>/` so its assets
@@ -40,11 +46,11 @@ showcase of how it works.
 
 | File | Role |
 |---|---|
-| `deploy/handler.go`, `deploy/main.go` | Go static server (`go:embed all:site`, `:8080`) |
+| `deploy/handler.go`, `deploy/main.go` | Go static server (`go:embed all:site`, `:8083`) |
 | `deploy/site/` | **Vendored** built SPAs (one dir/chain) + `index.html` + `csp.json` |
 | `deploy/build-site.sh` | Builds all 21 apps + generates `csp.json` + landing page |
 | `Containerfile` | Reproducible StageX `pallet-go` build → `FROM scratch` (repo root) |
-| `Procfile` | Caution run config (`run`, `ports`, `http_port`) (repo root) |
+| `Procfile` | Caution run config (`run`, `e2e`; repo root) |
 | `.github/workflows/build-site.yml` | Rebuilds & commits `deploy/site/` on app changes |
 | `Makefile` | Ops shortcuts (see `make help`) |
 
@@ -53,21 +59,21 @@ showcase of how it works.
 - **bun** (build the SPAs), **go** ≥ 1.22 (local server tests).
 - **Docker + buildx** for the enclave image. StageX images are **linux/amd64
   only**; on Apple Silicon the build runs under emulation (slower but works).
-- **caution CLI** for the actual deploy (`caution apps build/push`, `caution
-  verify`). See https://docs.caution.co/.
+- **caution CLI** for the actual deploy (`caution init`, `caution apps
+  build/create`, `caution verify`). See https://docs.caution.co/.
 
 ## Build & test locally
 
 ```bash
 make build      # bun install + build-site.sh + go test
-make run        # serve on http://localhost:8080  (try /, /ethereum/, /ada/)
+make run        # serve on http://localhost:8083  (try /, /ethereum/, /ada/)
 ```
 
 `make run` lets you eyeball routing and per-chain CSP headers:
 
 ```bash
-curl -sI http://localhost:8080/ada/ | grep -i content-security-policy   # has wasm-unsafe-eval
-curl -sI http://localhost:8080/ethereum/ | grep -i content-security-policy  # strict default
+curl -sI http://localhost:8083/ada/ | grep -i content-security-policy   # has wasm-unsafe-eval
+curl -sI http://localhost:8083/ethereum/ | grep -i content-security-policy  # strict default
 ```
 
 ## Reproducible build with StageX

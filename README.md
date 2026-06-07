@@ -272,7 +272,7 @@ That's it! Your protocol now has an interactive playbook with sample transaction
 
 The decoders can be served from a single AWS Nitro / Caution enclave. A small
 Go server (`deploy/`) embeds a prebuilt static tree (`deploy/site/`, one
-directory per chain plus a landing page) and serves it on `:8080` with the same
+directory per chain plus a landing page) and serves it on `:8083` with the same
 CSP/security headers used in production. Caution fronts it with TLS.
 
 - Build the vendored site: `deploy/build-site.sh` (CI does this automatically on
