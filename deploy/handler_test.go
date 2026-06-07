@@ -39,6 +39,13 @@ func TestServesChainIndex(t *testing.T) {
 	}
 }
 
+func TestServesChainIndexNoTrailingSlash(t *testing.T) {
+	rec := do(t, NewHandler(testFS()), "/ethereum")
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "ETH") {
+		t.Fatalf("got %d body=%q", rec.Code, rec.Body.String())
+	}
+}
+
 func TestServesAssetWithContentType(t *testing.T) {
 	rec := do(t, NewHandler(testFS()), "/ethereum/assets/app.js")
 	if rec.Code != http.StatusOK {
@@ -60,6 +67,10 @@ func TestUnknownTopLevel404(t *testing.T) {
 	rec := do(t, NewHandler(testFS()), "/nope/whatever")
 	if rec.Code != http.StatusNotFound {
 		t.Fatalf("got %d, want 404", rec.Code)
+	}
+	// Security headers are set before routing, so they must appear on 404s too.
+	if rec.Header().Get("Content-Security-Policy") == "" {
+		t.Fatalf("missing CSP header on 404 response")
 	}
 }
 
