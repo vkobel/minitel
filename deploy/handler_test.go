@@ -86,3 +86,30 @@ func TestSecurityHeadersPresent(t *testing.T) {
 		}
 	}
 }
+
+func TestPerChainCSPOverride(t *testing.T) {
+	fsys := testFS()
+	fsys["csp.json"] = &fstest.MapFile{Data: []byte(`{
+		"default": "default-src 'self'; script-src 'self'; connect-src 'self'",
+		"ada": "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; connect-src 'self'",
+		"dot": "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; connect-src 'self' wss://x.polkadot.io"
+	}`)}
+	fsys["ada/index.html"] = &fstest.MapFile{Data: []byte("<html>ADA</html>")}
+	fsys["dot/index.html"] = &fstest.MapFile{Data: []byte("<html>DOT</html>")}
+	h := NewHandler(fsys)
+
+	if csp := do(t, h, "/ada/").Header().Get("Content-Security-Policy"); !strings.Contains(csp, "wasm-unsafe-eval") {
+		t.Fatalf("ada CSP missing wasm: %q", csp)
+	}
+	if csp := do(t, h, "/dot/").Header().Get("Content-Security-Policy"); !strings.Contains(csp, "wss://x.polkadot.io") {
+		t.Fatalf("dot CSP missing rpc: %q", csp)
+	}
+	// A chain not in the map gets the default (no wasm).
+	if csp := do(t, h, "/ethereum/").Header().Get("Content-Security-Policy"); strings.Contains(csp, "wasm-unsafe-eval") {
+		t.Fatalf("ethereum should get default CSP, got %q", csp)
+	}
+	// Landing page gets default.
+	if csp := do(t, h, "/").Header().Get("Content-Security-Policy"); strings.Contains(csp, "wasm-unsafe-eval") {
+		t.Fatalf("landing should get default CSP, got %q", csp)
+	}
+}

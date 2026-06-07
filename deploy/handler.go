@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
 	"io/fs"
 	"mime"
 	"net/http"
@@ -10,10 +11,13 @@ import (
 	"time"
 )
 
-// securityHeaders mirrors apps/*/vercel.json so the enclave serves the exact
-// policy the app ships with today.
-var securityHeaders = map[string]string{
-	"Content-Security-Policy":   "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'",
+// defaultCSP is the strict policy used for the landing page and any chain
+// without an explicit override. It matches the policy shipped by the majority
+// of apps/*/vercel.json.
+const defaultCSP = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+
+// staticSecurityHeaders are identical across every app's vercel.json.
+var staticSecurityHeaders = map[string]string{
 	"X-Content-Type-Options":    "nosniff",
 	"Referrer-Policy":           "strict-origin-when-cross-origin",
 	"Strict-Transport-Security": "max-age=63072000; includeSubDomains; preload",
@@ -23,10 +27,14 @@ var securityHeaders = map[string]string{
 // NewHandler serves the embedded multi-app static tree. Each chain lives in its
 // own top-level directory (e.g. "ethereum/"). A miss under "<chain>/..." falls
 // back to "<chain>/index.html" so client-side routing works; "/" serves the
-// landing page at "index.html".
+// landing page at "index.html". The Content-Security-Policy is selected per
+// chain from csp.json (generated from each app's vercel.json) and falls back to
+// defaultCSP — some chains (ada, dot, ksm) need 'wasm-unsafe-eval' and/or extra
+// connect-src RPC endpoints.
 func NewHandler(siteFS fs.FS) http.Handler {
+	cspByChain := loadCSP(siteFS)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		for k, v := range securityHeaders {
+		for k, v := range staticSecurityHeaders {
 			w.Header().Set(k, v)
 		}
 
@@ -34,6 +42,13 @@ func NewHandler(siteFS fs.FS) http.Handler {
 		if name == "" {
 			name = "index.html"
 		}
+
+		chain, _, _ := strings.Cut(name, "/")
+		csp := cspByChain[chain]
+		if csp == "" {
+			csp = cspByChain["default"]
+		}
+		w.Header().Set("Content-Security-Policy", csp)
 
 		// Exact file hit.
 		if data, ok := readFile(siteFS, name); ok {
@@ -46,14 +61,36 @@ func NewHandler(siteFS fs.FS) http.Handler {
 			return
 		}
 		// SPA fallback: first path segment is a chain directory.
-		if seg, _, _ := strings.Cut(name, "/"); seg != "" {
-			if data, ok := readFile(siteFS, seg+"/index.html"); ok {
-				serveBytes(w, r, seg+"/index.html", data)
+		if chain != "" {
+			if data, ok := readFile(siteFS, chain+"/index.html"); ok {
+				serveBytes(w, r, chain+"/index.html", data)
 				return
 			}
 		}
 		http.NotFound(w, r)
 	})
+}
+
+// loadCSP reads the per-chain CSP map embedded as csp.json. It always returns a
+// map with a "default" key so callers can rely on a fallback even when csp.json
+// is absent (e.g. in unit tests).
+func loadCSP(siteFS fs.FS) map[string]string {
+	m := map[string]string{"default": defaultCSP}
+	data, err := fs.ReadFile(siteFS, "csp.json")
+	if err != nil {
+		return m
+	}
+	var parsed map[string]string
+	if err := json.Unmarshal(data, &parsed); err != nil {
+		return m
+	}
+	for k, v := range parsed {
+		m[k] = v
+	}
+	if m["default"] == "" {
+		m["default"] = defaultCSP
+	}
+	return m
 }
 
 func readFile(siteFS fs.FS, name string) ([]byte, bool) {

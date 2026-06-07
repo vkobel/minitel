@@ -29,4 +29,28 @@ done
   echo '</ul></body></html>'
 } > deploy/site/index.html
 
+# Generate the per-chain CSP map from each app's vercel.json (single source of
+# truth). The "default" key is the most common policy (landing page / unknown).
+python3 - <<'PY' > deploy/site/csp.json
+import glob, json, os
+from collections import Counter
+
+out = {}
+for vj in sorted(glob.glob("apps/*/vercel.json")):
+    chain = os.path.basename(os.path.dirname(vj))
+    data = json.load(open(vj))
+    csp = None
+    for block in data.get("headers", []):
+        for h in block["headers"]:
+            if h["key"] == "Content-Security-Policy":
+                csp = h["value"]
+    if csp:
+        out[chain] = csp
+
+if out:
+    out["default"] = Counter(out.values()).most_common(1)[0][0]
+
+print(json.dumps(out, indent=2, sort_keys=True))
+PY
+
 echo ">> done: $(ls -d deploy/site/*/ | wc -l | tr -d ' ') chains"
