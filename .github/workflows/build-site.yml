@@ -1,0 +1,40 @@
+name: build-site
+
+on:
+  push:
+    paths:
+      - 'apps/**'
+      - 'packages/**'
+      - 'deploy/build-site.sh'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-site:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Build site
+        run: ./deploy/build-site.sh
+
+      - name: Commit vendored dist if changed
+        run: |
+          if [ -n "$(git status --porcelain deploy/site)" ]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git add deploy/site
+            git commit -m "chore(enclave): rebuild vendored deploy/site"
+            git push
+          else
+            echo "deploy/site already up to date"
+          fi
