@@ -2,6 +2,10 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from '@/App';
 import '@/index.css';
+import { initEnclaveE2E } from '@/steve';
+
+// Register the STEVE service worker so traffic is E2E-encrypted to the enclave.
+void initEnclaveE2E();
 
 if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
   document.documentElement.classList.add('dark');

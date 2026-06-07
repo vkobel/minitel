@@ -1,4 +1,5 @@
 run: /server
 http_port: 8080
 ports: 8080
-app_sources: https://github.com/kilnfi/minitel
+e2e: true
+app_sources: https://github.com/vkobel/minitel
