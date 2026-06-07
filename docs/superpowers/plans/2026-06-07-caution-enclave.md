@@ -526,7 +526,7 @@ app_sources: https://github.com/kilnfi/minitel
 
 - [ ] **Step 2: Replace the domain placeholder**
 
-Edit the `domain:` line to the real production hostname before any `caution apps push`. `minitel.example.com` is a stand-in only. `http_port` (8080) is intentionally also listed in `ports` — Caution push validation rejects the Procfile otherwise.
+Edit the `domain:` line to the real production hostname before any `caution apps create`. `minitel.example.com` is a stand-in only. `http_port` (8080) is intentionally also listed in `ports` — Caution validation rejects the Procfile otherwise.
 
 - [ ] **Step 3: Commit**
 

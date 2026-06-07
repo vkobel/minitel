@@ -84,15 +84,22 @@ make digest     # prints stagex/pallet-go@sha256:... and its go version (must be
 
 ## Deploy to Caution
 
+Deploy goes through the `caution` CLI directly (it's interactive — FIDO2
+signing — so it isn't wrapped in the Makefile).
+
 1. **Set the domain.** Edit `Procfile` → `domain:` to the real hostname
    (it ships as `minitel.example.com`). `http_port` must stay listed in `ports`.
-2. **Build the enclave image:**
+2. **Initialize the deployment** (once, writes `.caution/`):
    ```bash
-   make caution-build      # caution apps build
+   caution init
    ```
-3. **Push it:**
+3. **Inspect the enclave image locally** (optional sanity check):
    ```bash
-   make deploy             # caution apps push
+   caution apps build      # builds the EIF locally, doesn't deploy
+   ```
+4. **Create / deploy the app:**
+   ```bash
+   caution apps create
    ```
 
 Caution builds from `deploy/Containerfile` (`docker build -f deploy/Containerfile .`
@@ -102,7 +109,7 @@ from the repo root), runs `/server` per the Procfile, and terminates TLS for
 ## Verify a live deployment
 
 ```bash
-make verify ATT_URL=https://<your-domain>/attestation
+caution verify --attestation-url https://<your-domain>/attestation
 ```
 
 This re-downloads the source at the attested commit, rebuilds the EIF, and
@@ -119,7 +126,7 @@ make site && git add deploy/site && git commit -m "chore: rebuild site"
 
 CI (`build-site.yml`) does this automatically on push, so the vendored dist and
 `csp.json` never drift from source. After the UI changes, redeploy with
-`make deploy`.
+`caution apps create`.
 
 ## Status & future work
 
