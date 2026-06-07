@@ -45,8 +45,8 @@ generate landing index.html          ├── solana/              │ Go stati
 assemble + commit deploy/site/       └── …21 dirs             │ go:embed site/  │
                                                               │ sets CSP headers│
                                    deploy/server/  ──build──► └─────────────────┘
-                                   deploy/Containerfile        FROM scratch, /server
-                                   Procfile
+                                   Containerfile (repo root)   FROM scratch, /server
+                                   Procfile (repo root)
 ```
 
 ## Components
@@ -87,7 +87,7 @@ What it does: serve the embedded multi-app static tree with security headers.
 Interface: HTTP on `:8080`.
 Depends on: `deploy/site/` at build time.
 
-### 3. `deploy/Containerfile` (StageX, reproducible)
+### 3. `Containerfile` (repo root; StageX, reproducible)
 
 - Build stage: `FROM stagex/pallet-go@sha256:<verified-digest>` (digest pinned).
   `CGO_ENABLED=0`, `GOOS=linux`, `GOARCH=amd64`, `SOURCE_DATE_EPOCH=1`.
@@ -101,16 +101,18 @@ Depends on: `deploy/site/` at build time.
 
 ### 4. `Procfile`
 
+At the repo root (alongside `Containerfile`). No `containerfile:` key needed —
+Caution auto-detects the root `Containerfile`.
+
 ```procfile
 run: /server
-containerfile: deploy/Containerfile
 http_port: 8080
 ports: 8080
-domain: <to-be-chosen>
 app_sources: https://github.com/kilnfi/minitel
 ```
 
-`http_port` value also appears in `ports` (Caution push validation requires it).
+`http_port` value also appears in `ports` (Caution Procfile validation requires
+it). Add `domain: <hostname>` if you want Caddy TLS fronting for a custom domain.
 
 ## Verification story
 

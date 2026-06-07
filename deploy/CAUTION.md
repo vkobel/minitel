@@ -37,8 +37,8 @@ the **CSP chosen per chain** (ada/dot/ksm need `wasm-unsafe-eval` and/or RPC
 | `deploy/handler.go`, `deploy/main.go` | Go static server (`go:embed all:site`, `:8080`) |
 | `deploy/site/` | **Vendored** built SPAs (one dir/chain) + `index.html` + `csp.json` |
 | `deploy/build-site.sh` | Builds all 21 apps + generates `csp.json` + landing page |
-| `deploy/Containerfile` | Reproducible StageX `pallet-go` build → `FROM scratch` |
-| `Procfile` | Caution run config (`run`, `ports`, `http_port`, `domain`) |
+| `Containerfile` | Reproducible StageX `pallet-go` build → `FROM scratch` (repo root) |
+| `Procfile` | Caution run config (`run`, `ports`, `http_port`) (repo root) |
 | `.github/workflows/build-site.yml` | Rebuilds & commits `deploy/site/` on app changes |
 | `Makefile` | Ops shortcuts (see `make help`) |
 
@@ -76,7 +76,7 @@ make repro      # two --no-cache OCI builds, compared with cmp -> "REPRODUCIBLE"
 ```
 
 Re-pin the StageX base when updating (writes nothing — copy the digest into
-`deploy/Containerfile`):
+`Containerfile`):
 
 ```bash
 make digest     # prints stagex/pallet-go@sha256:... and its go version (must be >= 1.22)
@@ -87,24 +87,29 @@ make digest     # prints stagex/pallet-go@sha256:... and its go version (must be
 Deploy goes through the `caution` CLI directly (it's interactive — FIDO2
 signing — so it isn't wrapped in the Makefile).
 
-1. **Set the domain.** Edit `Procfile` → `domain:` to the real hostname
-   (it ships as `minitel.example.com`). `http_port` must stay listed in `ports`.
-2. **Initialize the deployment** (once, writes `.caution/`):
+> **Both `Procfile` and `Containerfile` must sit at the repo root** of the branch
+> you deploy. Caution clones the repo, requires a root `Procfile` (with `run:`),
+> and auto-detects a root `Containerfile` (before `Dockerfile`). A `Procfile`
+> living only on a feature branch fails with *"No Procfile found in repository
+> root"* when a branch without it (e.g. bare `main`) is the one pushed — deploy
+> the branch that actually carries these files.
+
+1. **Initialize the deployment** (once, writes `.caution/`):
    ```bash
    caution init
    ```
-3. **Inspect the enclave image locally** (optional sanity check):
+2. **Inspect the enclave image locally** (optional sanity check):
    ```bash
    caution apps build      # builds the EIF locally, doesn't deploy
    ```
-4. **Create / deploy the app:**
+3. **Create / deploy the app:**
    ```bash
    caution apps create
    ```
 
-Caution builds from `deploy/Containerfile` (`docker build -f deploy/Containerfile .`
-from the repo root), runs `/server` per the Procfile, and terminates TLS for
-`domain` on `http_port`.
+Caution builds from the root `Containerfile` (`docker build -f Containerfile .`
+from the repo root) and runs `/server` per the Procfile. Set `domain:` +
+`http_port` in the Procfile if you want TLS fronting for a custom hostname.
 
 ## Verify a live deployment
 

@@ -2,7 +2,7 @@
 # Deploy/verify go through the caution CLI directly — see deploy/CAUTION.md.
 
 PLATFORM      ?= linux/amd64
-CONTAINERFILE ?= deploy/Containerfile
+CONTAINERFILE ?= Containerfile
 PALLET_GO     ?= stagex/pallet-go
 EPOCH         ?= 1
 

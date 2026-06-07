@@ -277,7 +277,7 @@ CSP/security headers used in production. Caution fronts it with TLS.
 
 - Build the vendored site: `deploy/build-site.sh` (CI does this automatically on
   changes to `apps/**` / `packages/**`).
-- Build recipe: `deploy/Containerfile` (StageX `pallet-go`, reproducible).
+- Build recipe: `Containerfile` (repo root; StageX `pallet-go`, reproducible).
 - Run recipe: `Procfile` (set `domain:` before deploying).
 - Verify a live deployment: `caution verify --attestation-url <url>` reproduces
   the PCRs from the attested commit.

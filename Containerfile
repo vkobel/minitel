@@ -7,7 +7,7 @@ ENV SOURCE_DATE_EPOCH=1 \
     GOARCH=amd64
 
 WORKDIR /src
-# Build context is the repo root (caution runs `docker build -f deploy/Containerfile .`).
+# Build context is the repo root (caution runs `docker build -f Containerfile .`).
 COPY deploy/ /src/
 
 # stdlib-only build -> no module downloads -> fully hermetic.
