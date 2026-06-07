@@ -267,3 +267,19 @@ Add interactive example transactions for educational purposes. The playbook show
    ```
 
 That's it! Your protocol now has an interactive playbook with sample transactions and educational content.
+
+## Serving from a Caution enclave
+
+The decoders can be served from a single AWS Nitro / Caution enclave. A small
+Go server (`deploy/`) embeds a prebuilt static tree (`deploy/site/`, one
+directory per chain plus a landing page) and serves it on `:8080` with the same
+CSP/security headers used in production. Caution fronts it with TLS.
+
+- Build the vendored site: `deploy/build-site.sh` (CI does this automatically on
+  changes to `apps/**` / `packages/**`).
+- Build recipe: `deploy/Containerfile` (StageX `pallet-go`, reproducible).
+- Run recipe: `Procfile` (set `domain:` before deploying).
+- Verify a live deployment: `caution verify --attestation-url <url>` reproduces
+  the PCRs from the attested commit.
+
+See `docs/superpowers/specs/2026-06-07-caution-enclave-design.md` for the design.
