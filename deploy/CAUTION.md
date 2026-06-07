@@ -3,6 +3,19 @@
 Practical recap of how this is built and deployed. Design rationale lives in
 `docs/caution-enclave-design.md`.
 
+> **The crux:** the built SPAs under `deploy/site/` are **committed to git on
+> purpose** (one dir per chain, with content-hashed assets like
+> `dot/assets/index-*.css`). Caution rebuilds from the repo at the attested
+> commit and **never runs your CI**, so the dist has to be in git for the enclave
+> to serve it and for `caution verify` to reproduce the PCRs. Only the Go binary
+> is built inside StageX; the static tree is read verbatim. CI (`build-site.yml`)
+> keeps `deploy/site/` in sync whenever `apps/**` changes — don't hand-edit it.
+>
+> **This is the v1 trade-off.** Vendoring side-steps non-deterministic JS builds
+> at the cost of trusting committed bytes — the *binary* is attested, the *site*
+> is not built inside the reproducible boundary. See
+> [Status & future work](#status--future-work) for the better v2 approach.
+
 ## What it is
 
 All 21 chain decoders (client-side Vite SPAs) are served from a **single**
@@ -28,10 +41,6 @@ the **CSP chosen per chain** (ada/dot/ksm need `wasm-unsafe-eval` and/or RPC
 | `Procfile` | Caution run config (`run`, `ports`, `http_port`, `domain`) |
 | `.github/workflows/build-site.yml` | Rebuilds & commits `deploy/site/` on app changes |
 | `Makefile` | Ops shortcuts (see `make help`) |
-
-The vendored `deploy/site/` is committed on purpose: Caution rebuilds from the
-repo at the attested commit and never runs CI, so the dist must be in git for
-verification to reproduce. CI keeps it in sync with source automatically.
 
 ## Prerequisites
 
@@ -111,3 +120,40 @@ make site && git add deploy/site && git commit -m "chore: rebuild site"
 CI (`build-site.yml`) does this automatically on push, so the vendored dist and
 `csp.json` never drift from source. After the UI changes, redeploy with
 `make deploy`.
+
+## Status & future work
+
+**This is v1.** It works and deploys, but it is deliberately the simpler design.
+Its one real weakness: the served UI is **not built inside the reproducible
+boundary**. StageX reproducibly compiles the Go server, but the SPA bundles are
+prebuilt on a developer machine / CI and committed to `deploy/site/`. `caution
+verify` therefore proves the *binary* matches source, and that the binary embeds
+*whatever bytes are in `deploy/site/` at the attested commit* — but it does not
+prove those bytes are the faithful output of `apps/**`. You are trusting the
+committed dist (and the CI job that regenerates it), not attesting it.
+
+Secondary costs: the repo carries built artifacts (content-hashed assets churn
+on every UI change, bloating history and diffs), and the vendored tree can drift
+if someone hand-edits it or bypasses CI.
+
+**v2 — build the SPAs inside StageX too.** Move the Vite build into the
+reproducible image so the *entire* artifact (site + server) is produced
+hermetically from `apps/**` + `packages/**`, with nothing prebuilt vendored:
+
+- Add a `stagex/pallet-bun` (or `pallet-nodejs`) build stage that runs
+  `bun install --frozen-lockfile` and the per-chain `vite build` with
+  `SOURCE_DATE_EPOCH=1`, then `COPY --from=build /site` into the Go stage's
+  embed path. Drop `deploy/site/` and `build-site.yml` entirely.
+- The hard part is JS build determinism (see the `stagex-reproducible-builds`
+  skill's Node section): Vite/esbuild/Rollup must emit byte-identical bundles
+  across two `--no-cache` builds. This needs a fully pinned toolchain
+  (bun version pinned, `bun.lock` frozen), no timestamp/hostname/absolute-path
+  leakage in the output, and a stable asset-hash seed. Prove it with the same
+  two-build `cmp` we use for the Go binary (`make repro`) before trusting it.
+- Generate `csp.json` inside that stage from `apps/*/vercel.json` (the logic
+  already lives in `build-site.sh`) so per-chain CSP stays data-driven.
+
+The payoff: `caution verify` then attests the actual UI a user loads, the repo
+stops carrying build output, and drift becomes impossible by construction. The
+blocker to doing it now is reproducible JS builds — until that's proven
+byte-for-byte, v1's vendor-and-trust is the honest, shippable choice.

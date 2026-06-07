@@ -36,3 +36,6 @@ apps/*/dist/
 apps/*/dist/assets/
 packages/*/dist/
 .vercel
+
+# Caution CLI local build output
+.caution/
