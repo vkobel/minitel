@@ -30,6 +30,12 @@ resolve under that prefix. The server sets the project's security headers, with
 the **CSP chosen per chain** (ada/dot/ksm need `wasm-unsafe-eval` and/or RPC
 `connect-src`), sourced from each app's `vercel.json`.
 
+**End-to-end encryption (STEVE):** the Procfile sets `e2e: true`, so Caution runs
+the STEVE proxy in the enclave and a browser service worker E2E-encrypts traffic
+to the attested enclave (host-blind, even though the host terminates TLS).
+Currently a **pilot on the `ethereum` app**. See `docs/steve-e2e.md` for the full
+showcase of how it works.
+
 ## Files
 
 | File | Role |
