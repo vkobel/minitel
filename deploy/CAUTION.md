@@ -1,7 +1,7 @@
 # Serving minitel from a Caution enclave
 
 Practical recap of how this is built and deployed. Design rationale lives in
-`docs/superpowers/specs/2026-06-07-caution-enclave-design.md`.
+`docs/caution-enclave-design.md`.
 
 ## What it is
 

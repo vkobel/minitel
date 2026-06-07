@@ -8,7 +8,7 @@
 
 **Tech Stack:** Go (stdlib only), `go:embed`, StageX `pallet-go`, Bun + Vite (existing app builds), Caution Procfile, GitHub Actions.
 
-**Spec:** `docs/superpowers/specs/2026-06-07-caution-enclave-design.md`
+**Spec:** `docs/caution-enclave-design.md`
 
 **Branch:** `feat/caution-enclave` (already created).
 
@@ -655,7 +655,7 @@ CSP/security headers used in production. Caution fronts it with TLS.
 - Verify a live deployment: `caution verify --attestation-url <url>` reproduces
   the PCRs from the attested commit.
 
-See `docs/superpowers/specs/2026-06-07-caution-enclave-design.md` for the design.
+See `docs/caution-enclave-design.md` for the design.
 ```
 
 - [ ] **Step 2: Commit**
