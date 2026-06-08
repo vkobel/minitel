@@ -108,20 +108,22 @@ signing — so it isn't wrapped in the Makefile).
 
 1. **Initialize the deployment** (once, writes `.caution/`):
    ```bash
-   caution init
+   caution init          # also runs `caution apps create` in the background
    ```
 2. **Inspect the enclave image locally** (optional sanity check):
    ```bash
-   caution apps build      # builds the EIF locally, doesn't deploy
+   caution apps build    # builds the EIF locally, doesn't deploy
    ```
-3. **Create / deploy the app:**
+3. **Deploy by pushing the branch to the caution remote:**
    ```bash
-   caution apps create
+   git push caution main
    ```
 
 Caution builds from the root `Containerfile` (`docker build -f Containerfile .`
 from the repo root) and runs `/server` per the Procfile. Set `domain:` +
 `http_port` in the Procfile if you want TLS fronting for a custom hostname.
+Confirm the deployment is serving what source produces with `caution verify`
+(see [Verify a live deployment](#verify-a-live-deployment)).
 
 ## Verify a live deployment
 
