@@ -55,7 +55,7 @@ var EnclaveClient = class {
           resolve(event.data);
         }
       };
-      navigator.serviceWorker.controller?.postMessage(
+      (navigator.serviceWorker.controller ?? this.registration.active)?.postMessage(
         { type, ...data },
         [channel.port2]
       );
