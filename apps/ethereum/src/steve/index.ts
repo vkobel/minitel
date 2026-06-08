@@ -11,7 +11,7 @@
 // without needing a `Service-Worker-Allowed` header.
 
 // @ts-expect-error - vendored JS module from steve-js-sdk/dist, ships no types
-import { registerEnclaveServiceWorker } from './register.js';
+import { registerEnclaveServiceWorker } from '@/steve/register.js';
 
 export async function initEnclaveE2E(): Promise<void> {
   if (!('serviceWorker' in navigator)) {
@@ -41,4 +41,52 @@ export async function initEnclaveE2E(): Promise<void> {
     // E2E is best-effort: a registration failure must not blank the decoder.
     console.error('STEVE E2E init failed:', err);
   }
+}
+
+// Status reported by the STEVE service worker's `get-status` message. Mirrors
+// the reply shape in `enclave-sw.js` (handleMessage -> "get-status").
+export type SteveStatus = {
+  type: 'status';
+  initialized: boolean;
+  error: string | null;
+  attestation: {
+    verified: boolean;
+    pcrs: Record<string, string>;
+    moduleId: string;
+  } | null;
+  lastKeyRotation: number | null;
+};
+
+/**
+ * Query the live STEVE service worker for its E2E status. Returns `null` when
+ * no controlling/active worker can be reached (no SW support, not yet
+ * registered, or no reply within `timeoutMs`). This reads the worker's real
+ * state — it does not assume or fabricate it.
+ */
+export async function getSteveStatus(timeoutMs = 4000): Promise<SteveStatus | null> {
+  if (!('serviceWorker' in navigator)) {
+    return null;
+  }
+  // `controller` is null until the SW controls the page; fall back to the
+  // active worker of the current registration so we can still query it.
+  const registration = await navigator.serviceWorker.getRegistration();
+  const target = navigator.serviceWorker.controller ?? registration?.active ?? null;
+  if (!target) {
+    return null;
+  }
+
+  return new Promise((resolve) => {
+    const channel = new MessageChannel();
+    const timer = setTimeout(() => resolve(null), timeoutMs);
+    channel.port1.onmessage = (event) => {
+      clearTimeout(timer);
+      resolve(event.data as SteveStatus);
+    };
+    try {
+      target.postMessage({ type: 'get-status' }, [channel.port2]);
+    } catch {
+      clearTimeout(timer);
+      resolve(null);
+    }
+  });
 }

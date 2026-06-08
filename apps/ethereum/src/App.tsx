@@ -1,8 +1,11 @@
 import { getCurrentProtocol, PROTOCOLS, type Protocol } from '@protocols/shared';
-import { Background, cn, Header, ProtocolTransactionDecoder, TransactionPlaybook } from '@protocols/ui';
+import { Background, Button, cn, Header, ProtocolTransactionDecoder, TransactionPlaybook } from '@protocols/ui';
+import { ShieldCheckIcon } from 'lucide-react';
 import { useState } from 'react';
 import { ETHEREUM_PLAYBOOK_OPERATIONS } from '@/config/playbook-operations';
 import { ethereumAdapter } from '@/ethereum-adapter';
+import { openAttestationModal } from '@/steve/attestation';
+import { SteveStatus } from '@/steve/SteveStatus';
 
 const currentProtocol = getCurrentProtocol();
 
@@ -40,6 +43,15 @@ function App() {
             onChangeProtocol={onChangeProtocol}
             togglePlaybook={togglePlaybook}
             isPlaybookOpen={playbook}
+            actions={
+              <>
+                <SteveStatus />
+                <Button variant="outline" onClick={openAttestationModal} aria-label="Verify enclave attestation">
+                  <ShieldCheckIcon />
+                  Verified enclave
+                </Button>
+              </>
+            }
           />
           <ProtocolTransactionDecoder adapter={ethereumAdapter} />
         </div>

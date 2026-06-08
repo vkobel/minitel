@@ -10,6 +10,8 @@ type HeaderProps = {
   onChangeProtocol: (protocol: Protocol) => void;
   togglePlaybook?: () => void;
   isPlaybookOpen?: boolean;
+  /** Optional extra actions rendered on the right (e.g. an attestation button). */
+  actions?: React.ReactNode;
 };
 
 export const Header = ({
@@ -18,6 +20,7 @@ export const Header = ({
   onChangeProtocol,
   togglePlaybook,
   isPlaybookOpen,
+  actions,
 }: HeaderProps) => {
   const handleProtocolChange = (protocol: Protocol) => {
     if (currentProtocol.url === protocol.url || currentProtocol.localUrl === protocol.localUrl) return;
@@ -61,12 +64,15 @@ export const Header = ({
           ))}
         </DropdownMenuContent>
       </DropdownMenu>
-      {togglePlaybook && (
-        <Toggle variant="outline" aria-label="Toggle decode playbook" onClick={togglePlaybook}>
-          {isPlaybookOpen ? 'Close decode playbook' : 'Open decode playbook'}
-          <PanelRightIcon />
-        </Toggle>
-      )}
+      <div className="flex items-center gap-2">
+        {actions}
+        {togglePlaybook && (
+          <Toggle variant="outline" aria-label="Toggle decode playbook" onClick={togglePlaybook}>
+            {isPlaybookOpen ? 'Close decode playbook' : 'Open decode playbook'}
+            <PanelRightIcon />
+          </Toggle>
+        )}
+      </div>
     </div>
   );
 };
