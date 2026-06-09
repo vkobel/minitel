@@ -10,6 +10,12 @@ enclave runs is **independently reproducible**, the running enclave is
 **verifies that attestation live and shows you the result** — with the hosting
 provider cut out of the trust boundary.
 
+**Live:** <https://minitel.kobl.one/ethereum/>. All 21 chains are served from the
+same enclave (`/solana/`, `/ada/`, …); **`ethereum` is the STEVE end-to-end
+encryption proof-of-concept** — it's the one page wired with the browser-side
+attestation + E2E layer described below. Every other page runs from the identical
+attested, reproducible enclave, just without the STEVE client layer yet.
+
 All 21 decoders are served from a **single AWS Nitro enclave**. A tiny Go server
 (`deploy/`) `go:embed`s the prebuilt SPAs and serves them on `:8083`; Caution
 fronts it with TLS. Each chain is a path prefix `/<chain>/` (built with Vite
@@ -60,11 +66,56 @@ surfaced **in the page header, live, in the user's own browser**:
 
 ## Verify it yourself
 
+Point the `caution` CLI at the live attestation endpoint. It fetches the signed
+Nitro document, rebuilds the EIF from the commit the manifest declares, and
+confirms the reproduced PCRs match the deployed enclave:
+
 ```bash
-caution verify --attestation-url https://<host>/attestation   # rebuild from the
-                                                              # attested commit;
-                                                              # confirm PCRs match
+caution verify --attestation-url https://minitel.kobl.one/attestation
 ```
+
+<details>
+<summary>Example output (passing)</summary>
+
+```
+> caution-macos-arm64-untrusted verify --attestation-url https://minitel.kobl.one/attestation
+Verifying enclave attestation...
+Learn more: https://docs.caution.co/concepts/attestation/
+
+Challenge nonce (sent): 3bf863f059ad8a707bfd05228b101e37f59885461d76c5350ec69eed01238064
+Requesting attestation...
+
+Remote PCR values (from deployed enclave):
+  PCR0: a930016af18817fd9e9468ccf14508a834cb07dccaae50d8b4a809183d4156d0c4b56fc801120a75a28e7762f48e378f
+  PCR1: a930016af18817fd9e9468ccf14508a834cb07dccaae50d8b4a809183d4156d0c4b56fc801120a75a28e7762f48e378f
+  PCR2: 21b9efbc184807662e966d34f390821309eeac6802309798826296bf3e8bec7c10edb30948c90ba67310f7b964fc500a
+
+Manifest information:
+  App source: https://github.com/vkobel/minitel commit: d88cdce79b5c6663660fd059b30532584dd53d34 branch: feat/caution-enclave
+  Enclave source: https://git.distrust.co/public/enclaveos/archive/9582e25239430070667fdd0a6b64d887f1c308df.tar.gz commit: 9582e25239430070667fdd0a6b64d887f1c308df
+  Framework source: https://codeberg.org/caution/platform/archive/main.tar.gz commit: 639bc8adc600563d9903fed228d93523a7d66fe2
+
+Reproducing build from remote manifest...
+Docker build completed successfully
+
+Expected PCR values:
+  PCR0: a930016af18817fd9e9468ccf14508a834cb07dccaae50d8b4a809183d4156d0c4b56fc801120a75a28e7762f48e378f
+  PCR1: a930016af18817fd9e9468ccf14508a834cb07dccaae50d8b4a809183d4156d0c4b56fc801120a75a28e7762f48e378f
+  PCR2: 21b9efbc184807662e966d34f390821309eeac6802309798826296bf3e8bec7c10edb30948c90ba67310f7b964fc500a
+
+Verifying attestation with bootproof-sdk...
+✓ Certificate chain verified against AWS Nitro root CA
+✓ All certificates are within validity period
+✓ COSE signature verified
+✓ Nonce verified (prevents replay attacks)
+✓ PCR values match expected
+
+✓ Attestation verification PASSED
+The deployed enclave matches the expected PCRs.
+This means the code running in the enclave is exactly what you expect.
+```
+
+</details>
 
 Or just open the `ethereum` decoder and click **Verified enclave** in the
 header — your browser fetches `/attestation`, verifies the AWS signature and PCR
@@ -72,12 +123,11 @@ chain, and shows you the result. In DevTools → Network you'll see asset reques
 sent as `POST … application/octet-stream` with an `X-E2P-Key` header: ciphertext
 the host can't read, bound to the attested enclave.
 
-## Build & test locally
+## Run it locally (the app, not the enclave)
 
 ```bash
 make build      # bun install + build all 21 SPAs + go test
 make run        # serve on http://localhost:8083  (try /, /ethereum/, /ada/)
-make repro      # prove the StageX build is byte-for-byte reproducible
 ```
 
 ```bash
@@ -85,19 +135,30 @@ curl -sI http://localhost:8083/ada/ | grep -i content-security-policy       # ha
 curl -sI http://localhost:8083/ethereum/ | grep -i content-security-policy  # strict default
 ```
 
-Needs **bun**, **go ≥ 1.22**, and **Docker + buildx** (StageX is linux/amd64 only;
-runs under emulation on Apple Silicon).
+Needs **bun** and **go ≥ 1.22**.
 
-## Deploy
+## Build, reproduce & deploy the enclave
 
-Deploy is interactive (FIDO2), so it goes through the `caution` CLI directly, not
-the Makefile. **Both `Procfile` and `Containerfile` must be at the repo root of the
-branch you push.**
+The enclave image is built, reproduced, and deployed with the **`caution` CLI** —
+see Caution's [fully-managed quickstart](https://docs.caution.co/quickstart/fully-managed/#what-you-need)
+for prerequisites (a Caution account + a FIDO2 authenticator; the build itself
+needs **Docker + buildx**, as StageX is linux/amd64 only and runs under emulation
+on Apple Silicon). **Both `Procfile` and `Containerfile` must be at the repo root
+of the branch you deploy.**
 
 ```bash
+caution login                  # FIDO2/WebAuthn (or `caution register` first)
 caution init                   # once; writes .caution/
-git push caution main          # build EIF + deploy
+
+caution apps build             # build the EIF locally — reproducible, no deploy.
+                               # Run it twice and compare PCRs to prove the StageX
+                               # build is byte-for-byte deterministic.
+
+caution apps create            # build + deploy to a Nitro enclave
 ```
+
+The commands are interactive (FIDO2 signing), so they're run directly, not via the
+Makefile.
 
 ### Updating the UI
 
@@ -113,8 +174,9 @@ C=ethereum && ( cd apps/$C && bunx vite build --base="/$C/" --outDir dist --empt
   && rm -rf deploy/site/$C && cp -r apps/$C/dist deploy/site/$C
 ```
 
-CI (`.github/workflows/build-site.yml`) regenerates the vendored dist + `csp.json`
-on push, so it never drifts from source — **don't hand-edit `deploy/site/`.**
+CI (`.github/workflows/build-site.yml`) rebuilds the site on push and **fails if
+`deploy/site/` is out of sync** with `apps/**` — so run `make site` and commit the
+rebuilt dist before pushing. **Don't hand-edit `deploy/site/`.**
 
 ## Honest scope & limitations (v1)
 
@@ -127,7 +189,7 @@ A verifiable showcase should be precise about what it does and doesn't prove:
 - **So `caution verify` attests the binary, not the UI's provenance.** It proves
   the server matches source and embeds whatever bytes are in `deploy/site/` — not
   that those bytes are the faithful output of `apps/**`. You trust the committed
-  dist (and the CI that regenerates it).
+  dist (CI checks it matches `apps/**`, but the check build is non-hermetic).
 - **For a static decoder, STEVE protects delivery, not secret payloads.** minitel
   parses transactions entirely in the browser and sends no private keys or
   sensitive data to the server. STEVE's value here is **attested, host-blind

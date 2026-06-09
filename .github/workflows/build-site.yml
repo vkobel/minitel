@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   build-site:
@@ -27,14 +27,11 @@ jobs:
       - name: Build site
         run: ./deploy/build-site.sh
 
-      - name: Commit vendored dist if changed
+      - name: Fail if deploy/site is out of sync with source
         run: |
           if [ -n "$(git status --porcelain deploy/site)" ]; then
-            git config user.name "github-actions[bot]"
-            git config user.email "github-actions[bot]@users.noreply.github.com"
-            git add deploy/site
-            git commit -m "chore(enclave): rebuild vendored deploy/site"
-            git push
-          else
-            echo "deploy/site already up to date"
+            echo "::error::deploy/site is stale. Run 'make site' and commit the rebuilt dist before pushing."
+            git diff --stat deploy/site
+            exit 1
           fi
+          echo "deploy/site is in sync with source."
