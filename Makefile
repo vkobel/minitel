@@ -1,5 +1,5 @@
 # Local build & reproducibility checks for the minitel enclave.
-# Deploy/verify go through the caution CLI directly — see deploy/CAUTION.md.
+# Deploy/verify go through the caution CLI directly — see deploy/README.md.
 
 PLATFORM      ?= linux/amd64
 CONTAINERFILE ?= Containerfile

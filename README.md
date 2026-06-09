@@ -283,4 +283,4 @@ CSP/security headers used in production. Caution fronts it with TLS.
   the PCRs from the attested commit.
 
 Ops shortcuts live in the root `Makefile` (`make help`). See
-`deploy/CAUTION.md` for the practical build/deploy walkthrough.
+`deploy/README.md` for the practical build/deploy walkthrough.

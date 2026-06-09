@@ -293,5 +293,5 @@ locally because the verifier only runs against a real attestation document.
 - Vendored SDK: `apps/ethereum/public/enclave-sw.js`, `apps/ethereum/src/steve/register.js`
 - Enclave switch: `Procfile` (`e2e: true`)
 - Enclave/build design: `docs/caution-enclave-design.md`
-- Deploy/verify walkthrough: `deploy/CAUTION.md`
+- Deploy/verify walkthrough: `deploy/README.md`
 - Upstream STEVE + SDK: the `steve` and `steve-js-sdk` projects
