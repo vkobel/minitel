@@ -7,7 +7,7 @@ PALLET_GO     ?= stagex/pallet-go
 EPOCH         ?= 1
 
 .DEFAULT_GOAL := help
-.PHONY: help install site test run build repro digest clean
+.PHONY: help install site site-one test run build repro digest clean
 
 help: ## List available targets
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) \
@@ -18,6 +18,14 @@ install: ## Install JS deps (frozen lockfile)
 
 site: ## Build all 21 chain SPAs + csp.json into deploy/site/
 	./deploy/build-site.sh
+
+site-one: ## Rebuild a single chain in place: make site-one C=ethereum (others untouched)
+	@test -n "$(C)" || { echo "set C=<chain>, e.g. make site-one C=ethereum"; exit 1; }
+	@test -d apps/$(C) || { echo "no such app: apps/$(C)"; exit 1; }
+	cd apps/$(C) && bunx vite build --base="/$(C)/" --outDir dist --emptyOutDir
+	rm -rf deploy/site/$(C)
+	cp -r apps/$(C)/dist deploy/site/$(C)
+	@echo ">> rebuilt deploy/site/$(C)"
 
 test: ## Run the Go server unit tests
 	cd deploy && go test ./...

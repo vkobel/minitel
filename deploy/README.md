@@ -165,13 +165,16 @@ Makefile.
 make site && git add deploy/site && git commit -m "chore: rebuild site"
 ```
 
-Rebuild a **single** chain without wiping the others (the full `build-site.sh` does
-`rm -rf deploy/site` first):
+Rebuild a **single** chain without wiping the others (the full `make site` /
+`build-site.sh` does `rm -rf deploy/site` first):
 
 ```bash
-C=ethereum && ( cd apps/$C && bunx vite build --base="/$C/" --outDir dist --emptyOutDir ) \
-  && rm -rf deploy/site/$C && cp -r apps/$C/dist deploy/site/$C
+make site-one C=ethereum
 ```
+
+It builds just that app with the right `--base=/<chain>/` and swaps only
+`deploy/site/<chain>`, leaving the other 20 untouched. Then commit the rebuilt
+dist as above.
 
 CI (`.github/workflows/build-site.yml`) rebuilds the site on push and **fails if
 `deploy/site/` is out of sync** with `apps/**` — so run `make site` and commit the
