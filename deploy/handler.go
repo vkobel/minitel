@@ -55,8 +55,21 @@ func NewHandler(siteFS fs.FS) http.Handler {
 			serveBytes(w, r, name, data)
 			return
 		}
-		// Directory request -> its index.html.
+		// Directory request -> its index.html. Canonicalize to a trailing slash
+		// first: each chain SPA is built with base "/<chain>/", and its STEVE
+		// service worker's scope is "/<chain>/". A page served at "/<chain>"
+		// (no slash) sits *outside* that scope, so the worker never controls it
+		// and `navigator.serviceWorker.ready` hangs. Redirect so the page always
+		// loads in scope.
 		if data, ok := readFile(siteFS, name+"/index.html"); ok {
+			if !strings.HasSuffix(r.URL.Path, "/") {
+				dest := r.URL.Path + "/"
+				if r.URL.RawQuery != "" {
+					dest += "?" + r.URL.RawQuery
+				}
+				http.Redirect(w, r, dest, http.StatusMovedPermanently)
+				return
+			}
 			serveBytes(w, r, name+"/index.html", data)
 			return
 		}

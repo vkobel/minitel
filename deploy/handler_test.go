@@ -39,10 +39,25 @@ func TestServesChainIndex(t *testing.T) {
 	}
 }
 
-func TestServesChainIndexNoTrailingSlash(t *testing.T) {
+func TestRedirectsChainRootToTrailingSlash(t *testing.T) {
+	// "/ethereum" must 301 to "/ethereum/" so the page lands inside the STEVE
+	// service worker's "/ethereum/" scope (otherwise the SW never controls it).
 	rec := do(t, NewHandler(testFS()), "/ethereum")
-	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "ETH") {
-		t.Fatalf("got %d body=%q", rec.Code, rec.Body.String())
+	if rec.Code != http.StatusMovedPermanently {
+		t.Fatalf("got %d, want 301", rec.Code)
+	}
+	if loc := rec.Header().Get("Location"); loc != "/ethereum/" {
+		t.Fatalf("Location = %q, want /ethereum/", loc)
+	}
+}
+
+func TestRedirectPreservesQuery(t *testing.T) {
+	rec := do(t, NewHandler(testFS()), "/ethereum?tx=0xabc")
+	if rec.Code != http.StatusMovedPermanently {
+		t.Fatalf("got %d, want 301", rec.Code)
+	}
+	if loc := rec.Header().Get("Location"); loc != "/ethereum/?tx=0xabc" {
+		t.Fatalf("Location = %q, want /ethereum/?tx=0xabc", loc)
 	}
 }
 
