@@ -34,11 +34,16 @@ export async function initEnclaveE2E(): Promise<void> {
 
   // Vite injects the per-chain base (e.g. "/ethereum/") at build time.
   const base = import.meta.env.BASE_URL;
+  // Scope without trailing slash covers both "/ethereum" and "/ethereum/" so
+  // the worker controls the page regardless of whether the user lands with or
+  // without a trailing slash. The server sends Service-Worker-Allowed: / to
+  // permit a scope above the script's own directory.
+  const scope = base.endsWith('/') ? base.slice(0, -1) : base;
 
   try {
     const client = await registerEnclaveServiceWorker({
       swPath: `${base}enclave-sw.js`,
-      scope: base,
+      scope,
       config: {
         // Absolute root paths — Caddy routes these to the enclave services,
         // independent of the app's base prefix.
@@ -47,7 +52,7 @@ export async function initEnclaveE2E(): Promise<void> {
         excludePrefixes: ['/attestation', '/e2p/'],
         // Leave the bootstrap shell unencrypted so the page can load before the
         // secure channel is established; everything else (assets) is encrypted.
-        passthroughPaths: [base, `${base}index.html`, `${base}enclave-sw.js`],
+        passthroughPaths: [base, scope, `${base}index.html`, `${base}enclave-sw.js`],
         // Stream encrypted asset traffic to the page for the verification panel.
         emitEncryptedPayloads: true,
       },

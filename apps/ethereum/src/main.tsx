@@ -3,7 +3,10 @@ import ReactDOM from 'react-dom/client';
 import App from '@/App';
 import '@/index.css';
 import { initEnclaveE2E } from '@/steve';
+import { startEnclaveVerification } from '@/steve/attestation';
 
+// Direct attestation check — independent of STEVE, drives the enclave badge.
+startEnclaveVerification();
 // Register the STEVE service worker so traffic is E2E-encrypted to the enclave.
 void initEnclaveE2E();
 

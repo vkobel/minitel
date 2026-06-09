@@ -56,6 +56,8 @@ export type SteveState = {
   /** Live feed of encrypted asset traffic (most recent last), capped. */
   assets: EncryptedAsset[];
   lastKeyRotation: number | null;
+  /** Result of the direct (STEVE-independent) attestation check. null = in-flight. */
+  enclaveVerified: boolean | null;
 };
 
 const MAX_ASSETS = 50;
@@ -69,6 +71,7 @@ let snapshot: SteveState = {
   keyExchange: null,
   assets: [],
   lastKeyRotation: null,
+  enclaveVerified: null,
 };
 
 const listeners = new Set<() => void>();
@@ -185,4 +188,8 @@ export function onEncryptedAsset(
 
 export function markUnsupported(): void {
   set({ supported: false, phase: 'idle' });
+}
+
+export function setEnclaveVerified(verified: boolean): void {
+  set({ enclaveVerified: verified });
 }

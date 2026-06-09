@@ -52,6 +52,12 @@ func NewHandler(siteFS fs.FS) http.Handler {
 
 		// Exact file hit.
 		if data, ok := readFile(siteFS, name); ok {
+			// Allow the SW to register with a scope that doesn't have a trailing
+			// slash (e.g. "/ethereum") so it controls both "/ethereum" and
+			// "/ethereum/" without requiring a redirect.
+			if strings.HasSuffix(name, "-sw.js") {
+				w.Header().Set("Service-Worker-Allowed", "/")
+			}
 			serveBytes(w, r, name, data)
 			return
 		}

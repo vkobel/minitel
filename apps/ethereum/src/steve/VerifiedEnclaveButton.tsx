@@ -1,10 +1,10 @@
 // Header "Verified enclave" badge.
 //
-// Truthful: it reflects the *actual* attestation verdict from the STEVE store,
-// not static text. Pending/amber while the enclave is being verified, green
-// once the Nitro attestation is verified, red if verification fails. Clicking
-// opens the attestation modal for the full on-demand detail (PCRs, source
-// commits) via the vendored distrust widget.
+// Reflects the result of a direct (STEVE-independent) Nitro attestation check:
+// pending while the check is in-flight, green once the enclave is verified,
+// red if attestation fails. Independent of the STEVE service worker so a
+// browser that can't register SWs (e.g. Chrome over self-signed TLS) still
+// shows the correct attestation result. Clicking opens the full detail modal.
 
 import { Button, cn } from '@protocols/ui';
 import { Loader2Icon, ShieldAlertIcon, ShieldCheckIcon } from 'lucide-react';
@@ -13,13 +13,9 @@ import { useSteveState } from '@/steve/store';
 
 type Verdict = 'pending' | 'verified' | 'failed';
 
-function verdictOf(phase: string, verified: boolean | undefined, error: string | null): Verdict {
-  if (verified) {
-    return 'verified';
-  }
-  if (phase === 'error' || verified === false || error) {
-    return 'failed';
-  }
+function verdictOf(enclaveVerified: boolean | null): Verdict {
+  if (enclaveVerified === true) return 'verified';
+  if (enclaveVerified === false) return 'failed';
   return 'pending';
 }
 
@@ -46,8 +42,8 @@ const PRESENTATION: Record<
 };
 
 export function VerifiedEnclaveButton() {
-  const { phase, attestation, error } = useSteveState();
-  const verdict = verdictOf(phase, attestation?.verified, error);
+  const { enclaveVerified } = useSteveState();
+  const verdict = verdictOf(enclaveVerified);
   const { label, className, Icon, spin } = PRESENTATION[verdict];
 
   return (

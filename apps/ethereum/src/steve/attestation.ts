@@ -14,9 +14,26 @@
 // encrypt/decrypt path.
 
 // @ts-expect-error - vendored JS bundle from attestation-widget/dist, ships no types
-import { showModal } from '@/steve/attestation-widget.js';
+import { AttestationWidget, showModal } from '@/steve/attestation-widget.js';
+import { setEnclaveVerified } from '@/steve/store';
 
 let isOpen = false;
+
+// Runs a background attestation check independent of the STEVE service worker.
+// Renders the widget into a detached (off-screen) element so no UI appears, but
+// the widget's internal DOM ops succeed. Result feeds the enclave verification badge.
+export function startEnclaveVerification(): void {
+  const detached = document.createElement('div');
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const widget = new (AttestationWidget as any)({
+    attestationUrl: '/attestation',
+    autoVerify: false,
+    onVerified: () => setEnclaveVerified(true),
+    onError: () => setEnclaveVerified(false),
+  });
+  widget.render(detached);
+  (widget.verify() as Promise<void>).catch(() => setEnclaveVerified(false));
+}
 
 export function openAttestationModal(): void {
   if (isOpen) {
