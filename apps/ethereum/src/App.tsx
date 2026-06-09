@@ -1,16 +1,18 @@
 import { getCurrentProtocol, PROTOCOLS, type Protocol } from '@protocols/shared';
-import { Background, Button, cn, Header, ProtocolTransactionDecoder, TransactionPlaybook } from '@protocols/ui';
-import { ShieldCheckIcon } from 'lucide-react';
+import { Background, cn, Header, ProtocolTransactionDecoder, TransactionPlaybook } from '@protocols/ui';
 import { useState } from 'react';
 import { ETHEREUM_PLAYBOOK_OPERATIONS } from '@/config/playbook-operations';
 import { ethereumAdapter } from '@/ethereum-adapter';
-import { openAttestationModal } from '@/steve/attestation';
-import { SteveStatus } from '@/steve/SteveStatus';
+import { SteveDetailPanel } from '@/steve/SteveDetailPanel';
+import { SteveStatusPill } from '@/steve/SteveStatusPill';
+import { VerifiedEnclaveButton } from '@/steve/VerifiedEnclaveButton';
 
 const currentProtocol = getCurrentProtocol();
 
 function App() {
   const [playbook, setPlaybook] = useState<boolean>(false);
+  // STEVE verification panel: open on load so the E2E handshake is visible.
+  const [steveOpen, setSteveOpen] = useState<boolean>(true);
 
   const togglePlaybook = () => {
     setPlaybook(!playbook);
@@ -45,14 +47,12 @@ function App() {
             isPlaybookOpen={playbook}
             actions={
               <>
-                <SteveStatus />
-                <Button variant="outline" onClick={openAttestationModal} aria-label="Verify enclave attestation">
-                  <ShieldCheckIcon />
-                  Verified enclave
-                </Button>
+                <SteveStatusPill isOpen={steveOpen} onToggle={() => setSteveOpen((open) => !open)} />
+                <VerifiedEnclaveButton />
               </>
             }
           />
+          {steveOpen && <SteveDetailPanel onClose={() => setSteveOpen(false)} />}
           <ProtocolTransactionDecoder adapter={ethereumAdapter} />
         </div>
         <TransactionPlaybook config={playbookConfig} isOpen={playbook} onClose={() => setPlaybook(false)} />

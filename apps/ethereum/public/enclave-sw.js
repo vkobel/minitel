@@ -458,7 +458,9 @@ var CONFIG = {
   passthroughPaths: ["/", "/enclave-sw.js", "/register.js", "/attestation-widget.js"],
   excludePrefixes: ["/attestation", "/e2p/"],
   keyRotationInterval: 30 * 60 * 1e3,
-  emitEncryptedPayloads: false
+  // Surface each encrypted asset request/response to the page so the STEVE
+  // verification panel can show the live encrypted traffic (CSS/JS assets).
+  emitEncryptedPayloads: true
 };
 var state = {
   sessionKey: null,
@@ -468,7 +470,12 @@ var state = {
   initialized: false,
   initPromise: null,
   lastKeyRotation: null,
-  error: null
+  error: null,
+  // Current handshake stage (drives the live status pill/panel).
+  stage: null,
+  // Key-exchange detail captured during performKeyExchange, surfaced to the
+  // page (hex-encoded) so the panel can show what the e2e-tester shows.
+  keyExchange: null
 };
 self.addEventListener("install", () => {
   self.skipWaiting();
@@ -497,11 +504,14 @@ async function handleMessage(event) {
         type: "status",
         initialized: state.initialized,
         error: state.error,
+        stage: state.stage,
         attestation: state.attestationResult ? {
           verified: state.attestationResult.verified,
           pcrs: state.attestationResult.pcrs,
-          moduleId: state.attestationResult.moduleId
+          moduleId: state.attestationResult.moduleId,
+          verifyingKey: state.verifyingKey ? bytesToHex2(state.verifyingKey) : null
         } : null,
+        keyExchange: state.keyExchange,
         lastKeyRotation: state.lastKeyRotation
       });
       break;
@@ -588,7 +598,7 @@ async function ensureInitialized() {
 }
 async function initializeSecureChannel() {
   try {
-    notifyClients("status", { stage: "requesting-attestation" });
+    setStage("requesting-attestation");
     const nonce = crypto.getRandomValues(new Uint8Array(32));
     const encodedNonce = bytesToBase64(nonce);
     const response = await fetch(CONFIG.attestationEndpoint, {
@@ -608,7 +618,7 @@ async function initializeSecureChannel() {
       throw new Error("No attestation document in response");
     }
     const attestationBytes = Uint8Array.from(atob(attestationB64), (c) => c.charCodeAt(0));
-    notifyClients("status", { stage: "verifying-attestation" });
+    setStage("verifying-attestation");
     const result = await verify(attestationBytes, { nonce });
     if (!result.verified) {
       throw new Error(`Attestation verification failed: ${result.error}`);
@@ -618,14 +628,16 @@ async function initializeSecureChannel() {
       throw new Error("No verifying key in attestation user data");
     }
     state.verifyingKey = new Uint8Array(result.userData.verifying_key);
-    notifyClients("status", { stage: "establishing-channel" });
+    setStage("establishing-channel");
     await performKeyExchange();
     state.initialized = true;
     state.error = null;
     state.lastKeyRotation = Date.now();
+    setStage("initialized");
     notifyClients("initialized", {
       pcrs: result.pcrs,
-      moduleId: result.moduleId
+      moduleId: result.moduleId,
+      verifyingKey: bytesToHex2(state.verifyingKey)
     });
   } catch (error) {
     state.error = error.message;
@@ -702,6 +714,16 @@ async function performKeyExchange() {
     false,
     ["encrypt", "decrypt"]
   );
+  state.keyExchange = {
+    ourPublicKey: bytesToHex2(ourPublicKeyBytes),
+    theirPublicKey: bytesToHex2(theirPublicKeyBytes),
+    signature: bytesToHex2(signature),
+    signatureValid,
+    sharedSecretBits: 256,
+    kdf: 'HKDF-SHA256(salt=∅, info="key")',
+    cipher: "AES-256-GCM"
+  };
+  notifyClients("key-exchange", state.keyExchange);
 }
 async function checkKeyRotation() {
   if (!state.lastKeyRotation) return;
@@ -775,7 +797,9 @@ function resetState() {
     initialized: false,
     initPromise: null,
     lastKeyRotation: null,
-    error: null
+    error: null,
+    stage: null,
+    keyExchange: null
   };
 }
 async function notifyClients(type, data) {
@@ -783,4 +807,8 @@ async function notifyClients(type, data) {
   for (const client of allClients) {
     client.postMessage({ type: `enclave:${type}`, ...data });
   }
+}
+function setStage(stage) {
+  state.stage = stage;
+  notifyClients("status", { stage });
 }

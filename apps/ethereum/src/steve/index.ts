@@ -9,12 +9,26 @@
 // `enclave-sw.js` lives in this app's `public/` and is served at
 // `<base>enclave-sw.js`; its scope is therefore `<base>` (e.g. `/ethereum/`)
 // without needing a `Service-Worker-Allowed` header.
+//
+// We keep the registered client and pipe its live `enclave:*` events into the
+// STEVE store so the header badges and detail panel reflect the worker's real
+// handshake state (see `store.ts`).
 
 // @ts-expect-error - vendored JS module from steve-js-sdk/dist, ships no types
 import { registerEnclaveServiceWorker } from '@/steve/register.js';
+import {
+  applyStatus,
+  markUnsupported,
+  onEncryptedAsset,
+  onError,
+  onInitialized,
+  onKeyExchange,
+  onStage,
+} from '@/steve/store';
 
 export async function initEnclaveE2E(): Promise<void> {
   if (!('serviceWorker' in navigator)) {
+    markUnsupported();
     return;
   }
 
@@ -34,59 +48,46 @@ export async function initEnclaveE2E(): Promise<void> {
         // Leave the bootstrap shell unencrypted so the page can load before the
         // secure channel is established; everything else (assets) is encrypted.
         passthroughPaths: [base, `${base}index.html`, `${base}enclave-sw.js`],
+        // Stream encrypted asset traffic to the page for the verification panel.
+        emitEncryptedPayloads: true,
       },
     });
+
+    // Subscribe to live handshake events before kicking off initialization so
+    // we don't miss any. (`enclave:` prefix is stripped by EnclaveClient.)
+    client.on('status', (data: { stage?: string }) => {
+      if (data.stage) {
+        onStage(data.stage);
+      }
+    });
+    client.on('initialized', (data: { pcrs?: Record<string, string>; moduleId?: string; verifyingKey?: string }) =>
+      onInitialized(data),
+    );
+    client.on('key-exchange', (data: Parameters<typeof onKeyExchange>[0]) => onKeyExchange(data));
+    client.on('key-rotated', () => {
+      /* lastKeyRotation already refreshed via the key-exchange event */
+    });
+    client.on('error', (data: { message?: string }) => onError(data.message ?? 'Unknown STEVE error'));
+    client.on('encrypted-request', (data: { path?: string; size: number; payload: string }) =>
+      onEncryptedAsset('request', data),
+    );
+    client.on('encrypted-response', (data: { status?: number; size: number; payload: string }) =>
+      onEncryptedAsset('response', data),
+    );
+
+    // Backfill whatever the worker already did (e.g. handshake triggered by an
+    // asset fetch before this code ran).
+    try {
+      applyStatus(await client.getStatus());
+    } catch {
+      /* status is best-effort; live events will fill in */
+    }
+
     await client.initialize();
+    applyStatus(await client.getStatus());
   } catch (err) {
     // E2E is best-effort: a registration failure must not blank the decoder.
     console.error('STEVE E2E init failed:', err);
+    onError(err instanceof Error ? err.message : String(err));
   }
-}
-
-// Status reported by the STEVE service worker's `get-status` message. Mirrors
-// the reply shape in `enclave-sw.js` (handleMessage -> "get-status").
-export type SteveStatus = {
-  type: 'status';
-  initialized: boolean;
-  error: string | null;
-  attestation: {
-    verified: boolean;
-    pcrs: Record<string, string>;
-    moduleId: string;
-  } | null;
-  lastKeyRotation: number | null;
-};
-
-/**
- * Query the live STEVE service worker for its E2E status. Returns `null` when
- * no controlling/active worker can be reached (no SW support, not yet
- * registered, or no reply within `timeoutMs`). This reads the worker's real
- * state — it does not assume or fabricate it.
- */
-export async function getSteveStatus(timeoutMs = 4000): Promise<SteveStatus | null> {
-  if (!('serviceWorker' in navigator)) {
-    return null;
-  }
-  // `controller` is null until the SW controls the page; fall back to the
-  // active worker of the current registration so we can still query it.
-  const registration = await navigator.serviceWorker.getRegistration();
-  const target = navigator.serviceWorker.controller ?? registration?.active ?? null;
-  if (!target) {
-    return null;
-  }
-
-  return new Promise((resolve) => {
-    const channel = new MessageChannel();
-    const timer = setTimeout(() => resolve(null), timeoutMs);
-    channel.port1.onmessage = (event) => {
-      clearTimeout(timer);
-      resolve(event.data as SteveStatus);
-    };
-    try {
-      target.postMessage({ type: 'get-status' }, [channel.port2]);
-    } catch {
-      clearTimeout(timer);
-      resolve(null);
-    }
-  });
 }
