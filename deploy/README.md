@@ -1,33 +1,34 @@
 # minitel in a verifiable enclave — Caution × STEVE × StageX
 
-minitel is a **client-side transaction decoder**: it parses and displays raw
-blockchain transactions in your browser so you can inspect exactly what you are
-about to sign, across 21 chains (`ethereum`, `solana`, `ada`, …). For a tool you
-use to vet transactions before signing, "trust the server to serve the right
-code" isn't good enough. This deployment removes that trust: every byte the
-enclave runs is **independently reproducible**, the running enclave is
-**cryptographically attested**, and (on the `ethereum` pilot) your browser
-**verifies that attestation live and shows you the result** — with the hosting
-provider cut out of the trust boundary.
+minitel is a **client-side transaction decoder**. It parses raw blockchain
+transactions in your browser so you can inspect what you're about to sign, across
+21 chains (`ethereum`, `solana`, `ada`, …). For a tool you use to vet transactions
+before signing, "trust the server to serve the right code" isn't good enough.
 
-**Live:** <https://minitel.kobl.one/ethereum/>. All 21 chains are served from the
-same enclave (`/solana/`, `/ada/`, …); **`ethereum` is the STEVE end-to-end
-encryption proof-of-concept** — it's the one page wired with the browser-side
-attestation + E2E layer described below. Every other page runs from the identical
-attested, reproducible enclave, just without the STEVE client layer yet.
+This deployment removes that trust. Every byte the enclave runs is
+**independently reproducible**. The running enclave is **cryptographically
+attested**. And on `ethereum`, your browser **verifies that attestation live and
+shows you the result**. The hosting provider is cut out of the trust boundary.
 
-All 21 decoders are served from a **single AWS Nitro enclave**. A tiny Go server
-(`deploy/`) `go:embed`s the prebuilt SPAs and serves them on `:8083`; Caution
-fronts it with TLS. Each chain is a path prefix `/<chain>/` (built with Vite
-`--base=/<chain>/`), with a landing page at `/` and per-chain CSP sourced from
-each app's `vercel.json`.
+**Live:** <https://minitel.kobl.one/ethereum/>
+
+All 21 chains run from one **AWS Nitro enclave**. A tiny Go server (`deploy/`)
+`go:embed`s the prebuilt SPAs and serves them on `:8083`; Caution fronts it with
+TLS. Each chain is a path prefix `/<chain>/` (built with Vite `--base=/<chain>/`),
+with a landing page at `/` and per-chain CSP from each app's `vercel.json`.
+`ethereum` is the only page wired with the **STEVE** browser-side E2E layer; the
+rest run from the same enclave without it (yet).
 
 ## The three guarantees
 
 - **Reproducible build (StageX).** The Go server compiles inside a digest-pinned
   `stagex/pallet-go` — no network, `SOURCE_DATE_EPOCH=1`, stripped build IDs —
   producing a byte-for-byte reproducible image. Anyone can rebuild it and get the
-  same bytes.
+  same bytes. **Caveat:** StageX builds only the Go binary. The SPAs use a Vite/bun
+  build that isn't yet byte-for-byte deterministic. So they're built locally,
+  committed to `deploy/site/`, and embedded verbatim. You build the UI locally,
+  *then* deploy. Moving that build onto the Caution builder is the v2 goal (see
+  [limitations](#honest-scope--limitations-v1)).
 - **Attested enclave (Caution).** Caution runs that image in a Nitro enclave,
   measured into PCRs and signed by AWS into an attestation document.
   `caution verify` rebuilds from the attested commit and confirms the PCRs match
@@ -39,8 +40,8 @@ each app's `vercel.json`.
 
 ## What a user sees (the `ethereum` pilot)
 
-The guarantees aren't just back-office mechanics — on `ethereum`, the proof is
-surfaced **in the page header, live, in the user's own browser**:
+These aren't just back-office mechanics. On `ethereum`, the proof is surfaced
+**in the page header, live, in the user's own browser**:
 
 - **"Verified enclave" badge.** On load, the page runs a Nitro attestation check
   *independently of STEVE* (so it works even where a service worker can't
@@ -58,17 +59,15 @@ surfaced **in the page header, live, in the user's own browser**:
   fetch streaming as ciphertext to the enclave). The badges reflect the *actual*
   handshake state — they go green only when the crypto really completes.
 
-> **STEVE is a pilot on `ethereum` only.** The client-side wiring (service worker
-> + the live verification UI) lives in `apps/ethereum/src/steve/` and
-> `apps/ethereum/public/enclave-sw.js`. The other 20 chains are served from the
-> same attested, reproducible enclave but don't yet have the browser-side E2E
-> layer. See `../docs/steve-e2e.md`.
+> Client wiring (service worker + verification UI): `apps/ethereum/src/steve/`
+> and `apps/ethereum/public/enclave-sw.js`. The other 20 chains use the same
+> enclave, just without this client layer yet.
 
 ## Verify it yourself
 
 Point the `caution` CLI at the live attestation endpoint. It fetches the signed
-Nitro document, rebuilds the EIF from the commit the manifest declares, and
-confirms the reproduced PCRs match the deployed enclave:
+Nitro document, rebuilds the EIF from the commit in the manifest, and confirms the
+reproduced PCRs match the deployed enclave.
 
 ```bash
 caution verify --attestation-url https://minitel.kobl.one/attestation
